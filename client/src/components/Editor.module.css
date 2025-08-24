@@ -1,0 +1,12 @@
+.wrapper {
+  height: 100%;
+}
+
+.cmEditor {
+  height: 100% !important;
+  font-size: 14px;
+  background-color: #0f172a;
+  color: #e2e8f0;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+}
