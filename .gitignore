@@ -1,3 +1,20 @@
-node_modules
+
+Dependencies
+--------------------
+Ignore the node_modules directory, which stores all the project's dependencies.
+This folder can become very large and can be recreated by running npm install.
+node_modules/
+
+Lockfiles
+--------------------
+While some teams commit package-lock.json to ensure consistent dependency versions
+across all environments, you've requested to ignore it. This might be desired
+if you want developers to get the latest compatible versions on install.
 package-lock.json
+
+Environment Variables
+--------------------
+Ignore environment variables files. These files often contain sensitive information
+like API keys, database passwords, and other secrets that should never be
+committed to version control.
 .env
