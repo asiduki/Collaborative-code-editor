@@ -1,5 +1,6 @@
 #  Collaborative-code-editor
 🚀 Collaborative Code Editor
+Open your browser at https://collaborative-code-editor-pearl.vercel.app/  and start collaborating 🎉
 
 A real-time collaborative code editor built with modern web technologies. This project allows multiple users to join a shared room, write code together, choose themes, run code, and see output instantly — just like working side by side.
 
@@ -44,20 +45,25 @@ git clone [https://github.com/your-username/collaborative-code-editor](https://g
 cd Collaborative-code-editor
 
 👉FrontEnd
+
 # Install dependencies
+
 cd client
+
 npm install
 
 # Start the development server
+
 npm run dev
 
 👉Backend
+
 cd server
+
 npm install
+
 node server.js
 
-Open your browser at https://collaborative-code-editor-pearl.vercel.app/
- and start collaborating 🎉
  
 👤 Connected Users Example
 
