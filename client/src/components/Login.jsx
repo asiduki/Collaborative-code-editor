@@ -15,11 +15,10 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
 
-
   const onSubmit = async (data) => {
     try {
       const response = await axios.post(
-        "http://localhost:5000/user/login",
+        `${import.meta.env.VITE_API_URL}/user/login`,
         {
           username: data.username,
           password: data.password,

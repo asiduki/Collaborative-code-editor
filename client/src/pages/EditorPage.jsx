@@ -6,7 +6,12 @@ import { language, cmtheme, username, data } from "../atoms";
 import { useRecoilState, useRecoilValue } from "recoil";
 import ACTIONS from "../actions/Actions";
 import { initSocket } from "../socket";
-import { useLocation, useNavigate, Navigate, useParams } from "react-router-dom";
+import {
+  useLocation,
+  useNavigate,
+  Navigate,
+  useParams,
+} from "react-router-dom";
 import { languageOptions } from "../constants/languageOptions";
 import axios from "axios";
 
@@ -75,9 +80,12 @@ const EditorPage = () => {
 
     const fetchSavedCode = async () => {
       try {
-        const response = await axios.get("http://localhost:5000/record/fetch", {
-          withCredentials: true,
-        });
+        const response = await axios.get(
+          `${import.meta.env.VITE_API_URL}/record/fetch`,
+          {
+            withCredentials: true,
+          }
+        );
 
         if (response.status === 200 && response.data.records.length > 0) {
           const latestCode = response.data.records[0].data;
@@ -132,9 +140,13 @@ const EditorPage = () => {
     debugger;
 
     try {
-      const response = await axios.post("http://localhost:5000/record/save", formData, {
-        withCredentials: true,
-      });
+      const response = await axios.post(
+        `${import.meta.env.VITE_API_URL}/record/save`,
+        formData,
+        {
+          withCredentials: true,
+        }
+      );
 
       if (response.status === 201 || response.status === 200) {
         toast.success("Code saved successfully.");
@@ -163,7 +175,11 @@ const EditorPage = () => {
   // ✅ FIXED: Corrected logout endpoint
   const handleLogout = async () => {
     try {
-      await axios.post("http://localhost:5000/user/logout", {}, { withCredentials: true });
+      await axios.post(
+        `${import.meta.env.VITE_API_URL}/user/logout`,
+        {},
+        { withCredentials: true }
+      );
       toast.success("Logged out successfully.");
       navigate("/login");
     } catch (err) {
@@ -174,7 +190,7 @@ const EditorPage = () => {
 
   const leaveRoom = async () => {
     try {
-     navigate(`/dashboard/${username}`);
+      navigate(`/dashboard/${username}`);
     } catch (err) {
       console.error("Leave room logout error:", err);
     }
@@ -198,7 +214,9 @@ const EditorPage = () => {
         </div>
 
         <div className="mb-6">
-          <label className="text-white text-sm font-medium mb-1 block">Language:</label>
+          <label className="text-white text-sm font-medium mb-1 block">
+            Language:
+          </label>
           <select
             value={lang.value}
             onChange={handleChangeLang}
@@ -211,7 +229,9 @@ const EditorPage = () => {
             ))}
           </select>
 
-          <label className="text-white text-sm font-medium mb-1 block">Theme:</label>
+          <label className="text-white text-sm font-medium mb-1 block">
+            Theme:
+          </label>
           <select
             value={them}
             onChange={handleChangeTheme}
@@ -256,10 +276,14 @@ const EditorPage = () => {
         </div>
 
         <div className="mt-6">
-          <h2 className="text-white text-sm font-medium mb-2">Connected Users:</h2>
+          <h2 className="text-white text-sm font-medium mb-2">
+            Connected Users:
+          </h2>
           <ul className="text-white text-sm space-y-1">
             {clients.map((client) => (
-              <li key={client.socketId} className="truncate">🔹 {client.username}</li>
+              <li key={client.socketId} className="truncate">
+                🔹 {client.username}
+              </li>
             ))}
           </ul>
         </div>

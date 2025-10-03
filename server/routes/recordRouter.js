@@ -8,7 +8,6 @@ const router = express.Router();
 router.get("/fetch", verifyToken, fetchRecords);
 router.post("/save", verifyToken, saveRecord);
 
-// ✅ NEW Routes for Rooms
 router.post("/create-room", verifyToken, createRoom);
 router.get("/fetch-rooms", verifyToken, fetchRooms);
 

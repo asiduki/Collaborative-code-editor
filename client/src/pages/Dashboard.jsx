@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react";
 import Form from "../components/Form";
-import { useParams, useNavigate, useNavigate as useHistory } from "react-router-dom";
+import {
+  useParams,
+  useNavigate,
+  useNavigate as useHistory,
+} from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
 
@@ -16,7 +20,7 @@ function Dashboard() {
   // Logout handler
   const handleLogout = async () => {
     try {
-      await axios.post("http://localhost:5000/user/logout", null, {
+      await axios.post(`${import.meta.env.VITE_API_URL}/user/logout`, null, {
         withCredentials: true,
       });
       toast.success("Logged out");
@@ -31,9 +35,12 @@ function Dashboard() {
   useEffect(() => {
     const fetchRooms = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/record/fetch-rooms", {
-          withCredentials: true,
-        });
+        const res = await axios.get(
+          `${import.meta.env.VITE_API_URL}/record/fetch-rooms`,
+          {
+            withCredentials: true,
+          }
+        );
         setRooms(res.data);
       } catch (err) {
         toast.error("Failed to load rooms");

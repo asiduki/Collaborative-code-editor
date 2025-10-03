@@ -26,11 +26,14 @@ const Register = () => {
 
   const onSubmit = async (data) => {
     try {
-      const res = await axios.post(`http://localhost:5000/user/register`, data);
+      const res = await axios.post(
+        `${import.meta.env.VITE_API_URL}/user/register`,
+        data
+      );
       if (res.status === 201) {
         // Auto login after register
         const loginRes = await axios.post(
-          "http://localhost:5000/user/login",
+          `${import.meta.env.VITE_API_URL}/user/login`,
           {
             username: data.username,
             password: data.password,
@@ -42,7 +45,7 @@ const Register = () => {
 
         if (loginRes.status === 200) {
           navigate(`/dashboard/${data.username}`);
-        } 
+        }
       }
     } catch (error) {
       if (error.response?.status === 409) {
