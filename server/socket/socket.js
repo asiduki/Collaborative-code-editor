@@ -14,12 +14,12 @@ const io = new Server(server, {
 });
 
 // -------------------------
-// STATE
+// Users aur voice rooms ka data store
 // -------------------------
 const userSocketMap = {};
-const voiceRooms = {}; // voiceRooms[roomId] = Set(socketIds)
+const voiceRooms = {};
 
-/* Utility */
+// Room me connected clients ka list lene ka function
 function getAllConnectedClients(roomId) {
   return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(
     (socketId) => ({
@@ -30,11 +30,8 @@ function getAllConnectedClients(roomId) {
 }
 
 io.on("connection", (socket) => {
-  console.log(`[SERVER] Socket connected: ${socket.id}`);
-
-  // -----------------------------
-  // CODE EDITOR JOIN
-  // -----------------------------
+  
+  // User room me join kar raha hai (code editor wala)
   socket.on(ACTIONS.JOIN, ({ roomId, username }) => {
     userSocketMap[socket.id] = username;
     socket.join(roomId);
@@ -48,74 +45,55 @@ io.on("connection", (socket) => {
         socketId: socket.id,
       });
     });
-
-    console.log(`[JOIN] ${username} joined ${roomId}`);
   });
 
+  // Code change dusre users ko send karna
   socket.on(ACTIONS.CODE_CHANGE, ({ roomId, code }) => {
     socket.broadcast.to(roomId).emit(ACTIONS.CODE_CHANGE, { code });
   });
 
+  // New user ko code sync karwana
   socket.on(ACTIONS.SYNC_CODE, ({ socketId, code }) => {
     io.to(socketId).emit(ACTIONS.CODE_CHANGE, { code });
   });
 
-  // =======================================================
-  // 🔥 VOICE / VIDEO 100% FIXED
-  // =======================================================
-  socket.on("join-voice", ({ roomId, userName }) => {
-    console.log(
-      `[VOICE] join-voice request from socket=${socket.id} userName=${userName} room=${roomId}`
-    );
-
-    // Create Set if not exist
+  // Voice/Video room join karna (WebRTC signaling)
+  socket.on("join-voice", ({ roomId }) => {
     if (!voiceRooms[roomId]) voiceRooms[roomId] = new Set();
 
     const existingPeers = [...voiceRooms[roomId]];
 
-    // Step 1: send existing peers to new peer
+    // New user ko old peers ka list dena
     socket.emit("voice-existing-peers", { peers: existingPeers });
 
-    // Step 2: join dedicated voice room
+    // Voice room join karana
     socket.join(`voice_${roomId}`);
 
-    // Step 3: notify existing peers about new join
+    // Old users ko batana ki new peer join hua hai
     socket.to(`voice_${roomId}`).emit("voice-peer-joined", {
       socketId: socket.id,
     });
 
-    // Step 4: add new peer
+    // New peer ko add karna
     voiceRooms[roomId].add(socket.id);
-
-    console.log(
-      `[VOICE] ${userName} (${socket.id}) joined voice_${roomId}. Peers now:`,
-      [...voiceRooms[roomId]]
-    );
   });
 
-  // -----------------------------
-  // SIGNALING
-  // -----------------------------
+  // Offer bhejna
   socket.on("voice-offer", ({ target, offer }) => {
-    console.log(`[VOICE SIGNAL] offer from ${socket.id} -> ${target}`);
     io.to(target).emit("voice-offer", { from: socket.id, offer });
   });
 
+  // Answer bhejna
   socket.on("voice-answer", ({ target, answer }) => {
-    console.log(`[VOICE SIGNAL] answer from ${socket.id} -> ${target}`);
     io.to(target).emit("voice-answer", { from: socket.id, answer });
   });
 
+  // ICE candidate bhejna
   socket.on("voice-ice", ({ target, candidate }) => {
-    console.log(
-      `[VOICE SIGNAL] ice from ${socket.id} -> ${target} (candidate? ${!!candidate})`
-    );
     io.to(target).emit("voice-ice", { from: socket.id, candidate });
   });
 
-  // -----------------------------
-  // LEAVE VOICE ROOM
-  // -----------------------------
+  // Voice room se nikalna
   socket.on("leave-voice", ({ roomId }) => {
     const vr = `voice_${roomId}`;
     socket.leave(vr);
@@ -131,16 +109,10 @@ io.on("connection", (socket) => {
         delete voiceRooms[roomId];
       }
     }
-
-    console.log(`[VOICE] ${socket.id} left ${vr}`);
   });
 
-  // -----------------------------
-  // DISCONNECT
-  // -----------------------------
+  // Disconnect hone par clean-up
   socket.on("disconnecting", () => {
-    console.log(`[SERVER] disconnecting: ${socket.id}`);
-
     Object.keys(voiceRooms).forEach((roomId) => {
       if (voiceRooms[roomId].has(socket.id)) {
         voiceRooms[roomId].delete(socket.id);
