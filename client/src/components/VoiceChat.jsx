@@ -16,10 +16,11 @@ export default function VoiceChat({
   const localStreamRef = useRef(null); 
   const joinedRef = useRef(false); 
   
-  // We use refs for media states to access them instantly inside async functions
+  // Refs for instant access inside async media functions
   const isScreenSharingRef = useRef(false); 
   const isCamEnabledRef = useRef(false); 
 
+  // CRITICAL: Buffer for ICE candidates that arrive before the Offer
   const pendingCandidatesRef = useRef({}); 
   
   // --- Audio Visualization Refs ---
@@ -37,10 +38,21 @@ export default function VoiceChat({
   const [selectedCam, setSelectedCam] = useState("");
   const [localLevel, setLocalLevel] = useState(0);
 
+  /**
+   * PRODUCTION NOTE:
+   * For deployment (AWS, Vercel, Heroku), you MUST add a TURN server here.
+   * STUN (Google) only works on simple networks. TURN relays traffic through firewalls.
+   * Get free TURN creds from: https://www.metered.ca/tools/openrelay/ or Twilio.
+   */
   const STUN_CONFIG = {
     iceServers: [
       { urls: "stun:stun.l.google.com:19302" },
       { urls: "stun:global.stun.twilio.com:3478" },
+      // {
+      //   urls: "turn:your-turn-server-url",
+      //   username: "username",
+      //   credential: "password"
+      // }
     ],
   };
 
@@ -77,22 +89,16 @@ export default function VoiceChat({
   }, []);
 
   // ==========================================
-  // 2. Media Acquisition (Fixed Logic)
+  // 2. Media Acquisition
   // ==========================================
-  
-  /**
-   * updateLocalMedia now accepts overrides to handle "Click -> State Change" instantly
-   * without waiting for React render cycles.
-   */
   const updateLocalMedia = async (overrides = {}) => {
     if (!joinedRef.current) return;
 
     try {
-      // Determine strict state: Use override if present, otherwise fall back to Ref
+      // Strict state determination
       const targetScreen = overrides.hasOwnProperty('screen') ? overrides.screen : isScreenSharingRef.current;
       const targetVideo = overrides.hasOwnProperty('video') ? overrides.video : isCamEnabledRef.current;
 
-      // 1. Define Constraints
       const constraints = {
         audio: selectedMic ? { deviceId: { exact: selectedMic } } : true,
         video: targetScreen 
@@ -102,14 +108,13 @@ export default function VoiceChat({
 
       let newStream = null;
 
-      // 2. Get Stream
       if (targetScreen) {
         newStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
       } else {
         newStream = await navigator.mediaDevices.getUserMedia(constraints);
       }
 
-      // 3. Handle "Stop Sharing" from Browser UI
+      // Handle browser UI "Stop Sharing" button
       if (targetScreen) {
         const vidTrack = newStream.getVideoTracks()[0];
         if (vidTrack) {
@@ -120,12 +125,12 @@ export default function VoiceChat({
         }
       }
 
-      // 4. Stop Old Tracks
+      // Stop old tracks
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(t => t.stop());
       }
 
-      // 5. Update Refs & UI
+      // Update Refs
       localStreamRef.current = newStream;
       onLocalStream?.(newStream);
       startLocalVAD(newStream);
@@ -133,19 +138,17 @@ export default function VoiceChat({
       // Apply Mute
       newStream.getAudioTracks().forEach(t => t.enabled = !muted);
 
-      // 6. Update Existing Peers (Seamless Track Replacement)
+      // Update Existing Peers
       const audioTrack = newStream.getAudioTracks()[0];
       const videoTrack = newStream.getVideoTracks()[0];
 
       for (const [peerId, pc] of Object.entries(peersRef.current)) {
         const senders = pc.getSenders();
         
-        // Audio
         const audioSender = senders.find(s => s.track?.kind === 'audio');
         if (audioSender && audioTrack) await audioSender.replaceTrack(audioTrack);
         else if (audioTrack) pc.addTrack(audioTrack, newStream);
 
-        // Video
         const videoSender = senders.find(s => s.track?.kind === 'video');
         if (videoSender) {
             await videoSender.replaceTrack(videoTrack || null);
@@ -156,14 +159,12 @@ export default function VoiceChat({
 
     } catch (err) {
       console.error("Media Error:", err);
-      // Revert state on failure
       if (overrides.screen) toggleScreenShare(false);
       if (overrides.video) toggleCamera(false);
       toast.error("Failed to access device");
     }
   };
 
-  // Re-run when devices change
   useEffect(() => {
     if (joined) updateLocalMedia();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -203,7 +204,7 @@ export default function VoiceChat({
   };
 
   // ==========================================
-  // 4. WebRTC & Socket
+  // 4. WebRTC & Socket (FIXED for Race Conditions)
   // ==========================================
   const createPeer = (peerId) => {
     if (peersRef.current[peerId]) return peersRef.current[peerId];
@@ -242,20 +243,29 @@ export default function VoiceChat({
     if (!myId) return;
     for (const peerId of peers) {
       if (myId > peerId) {
-        createPeer(peerId); // We offer (handled by negotiationneeded or manually)
+        createPeer(peerId); // We offer
       } else {
         createPeer(peerId); // We answer
       }
     }
   };
 
+  // FIXED: Handle ICE buffer to prevent "Remote description null" error
   const handleOffer = async ({ from, offer }) => {
     const pc = createPeer(from);
-    if (pc.signalingState !== "stable") return;
+    
+    // If we are currently negotiating, ignore to avoid conflicts (simple mesh strategy)
+    if (pc.signalingState !== "stable" && pc.signalingState !== "have-remote-offer") return;
+
     await pc.setRemoteDescription(offer);
     
+    // Process Buffered ICE Candidates NOW that remote description is set
     if (pendingCandidatesRef.current[from]) {
-      for (const c of pendingCandidatesRef.current[from]) await pc.addIceCandidate(c);
+      for (const c of pendingCandidatesRef.current[from]) {
+        try {
+           await pc.addIceCandidate(c);
+        } catch (e) { console.warn("Buffered ICE failed", e); }
+      }
       delete pendingCandidatesRef.current[from];
     }
 
@@ -266,13 +276,27 @@ export default function VoiceChat({
 
   const handleAnswer = async ({ from, answer }) => {
     const pc = peersRef.current[from];
-    if (pc) await pc.setRemoteDescription(answer);
+    if (pc) {
+      await pc.setRemoteDescription(answer);
+      // Just in case candidates arrived for the answerer too
+      if (pendingCandidatesRef.current[from]) {
+        for (const c of pendingCandidatesRef.current[from]) await pc.addIceCandidate(c).catch(e => {});
+        delete pendingCandidatesRef.current[from];
+      }
+    }
   };
 
+  // FIXED: Check for remoteDescription before adding candidate
   const handleIce = async ({ from, candidate }) => {
     const pc = peersRef.current[from];
-    if (pc) await pc.addIceCandidate(candidate);
-    else {
+    
+    if (pc && pc.remoteDescription) {
+      // Safe to add
+      try {
+        await pc.addIceCandidate(candidate);
+      } catch (e) { console.warn("ICE Add Failed", e); }
+    } else {
+      // Buffer it
       if (!pendingCandidatesRef.current[from]) pendingCandidatesRef.current[from] = [];
       pendingCandidatesRef.current[from].push(candidate);
     }
@@ -309,7 +333,7 @@ export default function VoiceChat({
   }, []);
 
   // ==========================================
-  // 5. Actions (Fixed for responsiveness)
+  // 5. Actions
   // ==========================================
   
   const joinVoice = async () => {
@@ -349,15 +373,12 @@ export default function VoiceChat({
     }
   };
 
-  // FIXED: Use direct argument passing for instant toggle
   const toggleCamera = async (forceState = null) => {
     if (isScreenSharingRef.current && forceState !== false) return toast.error("Stop screen share first");
     
     const next = forceState !== null ? forceState : !camEnabled;
     setCamEnabled(next);
-    isCamEnabledRef.current = next; // Update ref immediately
-    
-    // Pass the new state explicitly
+    isCamEnabledRef.current = next;
     await updateLocalMedia({ video: next });
   };
 
@@ -370,12 +391,11 @@ export default function VoiceChat({
       setCamEnabled(false);
       isCamEnabledRef.current = false;
     }
-    
     await updateLocalMedia({ screen: next, video: false });
   };
 
   // ==========================================
-  // 6. Render (Compacted UI)
+  // 6. Render
   // ==========================================
   return (
     <div className="mt-4 p-3 bg-[#0d1117] border-t border-b border-gray-800 text-xs text-white">
@@ -386,7 +406,6 @@ export default function VoiceChat({
         {joined && (
           <div className="flex items-center gap-2 bg-[#161b22] px-2 py-1 rounded border border-gray-800">
              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-             {/* Mini Visualizer */}
              <div className="flex items-end gap-0.5 h-3">
                 {[1,2,3].map(i => (
                     <div key={i} className="w-1 bg-green-500/80 rounded-sm"
@@ -397,13 +416,11 @@ export default function VoiceChat({
         )}
       </div>
 
-      {/* Compact Device Grid */}
       <div className="grid grid-cols-2 gap-2 mb-3">
          <select 
             value={selectedMic} 
             onChange={e => setSelectedMicLocal(e.target.value)}
             className="bg-[#161b22] border border-gray-700 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none truncate"
-            title="Microphone"
          >
             {devices.mics.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label || "Mic"}</option>)}
          </select>
@@ -412,14 +429,12 @@ export default function VoiceChat({
             value={selectedCam} 
             onChange={e => setSelectedCam(e.target.value)}
             className="bg-[#161b22] border border-gray-700 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none truncate"
-            title="Camera"
          >
             {devices.cams.length === 0 && <option value="">No Cam</option>}
             {devices.cams.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label || "Cam"}</option>)}
          </select>
       </div>
 
-      {/* Compact Button Grid */}
       <div className="grid grid-cols-2 gap-2">
         {!joined ? (
           <button onClick={joinVoice} className="col-span-2 bg-green-600 hover:bg-green-700 text-white py-1.5 rounded font-medium transition-all">
