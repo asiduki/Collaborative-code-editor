@@ -11,23 +11,23 @@ export default function VoiceChat({
   selectedSpeaker,
   setSelectedSpeaker,
 }) {
-  // --- Refs (Mutable state for logic) ---
-  const peersRef = useRef({}); 
-  const localStreamRef = useRef(null); 
-  const joinedRef = useRef(false); 
-  
-  // Refs for instant access inside async media functions
-  const isScreenSharingRef = useRef(false); 
-  const isCamEnabledRef = useRef(false); 
+  // --- Refs ---
+  const peersRef = useRef({});
+  const localStreamRef = useRef(null);
+  const joinedRef = useRef(false);
 
-  // CRITICAL: Buffer for ICE candidates that arrive before the Offer
-  const pendingCandidatesRef = useRef({}); 
-  
-  // --- Audio Visualization Refs ---
+  // Media State Refs (for instant access in async functions)
+  const isScreenSharingRef = useRef(false);
+  const isCamEnabledRef = useRef(false);
+
+  // ICE Buffer (Stores candidates arriving before Remote Description is set)
+  const pendingCandidatesRef = useRef({});
+
+  // Audio Viz Refs
   const analyserRef = useRef(null);
   const rafRef = useRef(null);
 
-  // --- State (UI) ---
+  // --- State ---
   const [joined, setJoined] = useState(false);
   const [camEnabled, setCamEnabled] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -38,28 +38,28 @@ export default function VoiceChat({
   const [selectedCam, setSelectedCam] = useState("");
   const [localLevel, setLocalLevel] = useState(0);
 
-  /**
-   * PRODUCTION NOTE:
-   * For deployment (AWS, Vercel, Heroku), you MUST add a TURN server here.
-   * STUN (Google) only works on simple networks. TURN relays traffic through firewalls.
-   * Get free TURN creds from: https://www.metered.ca/tools/openrelay/ or Twilio.
-   */
+  // ===========================================================
+  // CRITICAL: TURN SERVER CONFIGURATION
+  // ===========================================================
   const STUN_CONFIG = {
     iceServers: [
       { urls: "stun:stun.l.google.com:19302" },
       { urls: "stun:global.stun.twilio.com:3478" },
-      // {
-      //   urls: "turn:your-turn-server-url",
-      //   username: "username",
-      //   credential: "password"
-      // }
+      // UNCOMMENT AND ADD YOUR TURN CREDENTIALS FOR PRODUCTION:
+      /*
+      {
+        urls: "turn:global.turn.metered.ca:80",
+        username: "YOUR_USERNAME",
+        credential: "YOUR_PASSWORD"
+      }
+      */
     ],
   };
 
   const log = (...args) => console.log("[VoiceChat]", ...args);
 
   // ==========================================
-  // 1. Device Management
+  // 1. Device Logic
   // ==========================================
   const refreshDevices = async () => {
     try {
@@ -95,7 +95,6 @@ export default function VoiceChat({
     if (!joinedRef.current) return;
 
     try {
-      // Strict state determination
       const targetScreen = overrides.hasOwnProperty('screen') ? overrides.screen : isScreenSharingRef.current;
       const targetVideo = overrides.hasOwnProperty('video') ? overrides.video : isCamEnabledRef.current;
 
@@ -107,61 +106,54 @@ export default function VoiceChat({
       };
 
       let newStream = null;
-
       if (targetScreen) {
         newStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
       } else {
         newStream = await navigator.mediaDevices.getUserMedia(constraints);
       }
 
-      // Handle browser UI "Stop Sharing" button
+      // Handle browser "Stop Sharing" UI
       if (targetScreen) {
         const vidTrack = newStream.getVideoTracks()[0];
         if (vidTrack) {
           vidTrack.onended = () => {
-            log("Screen share ended via browser UI");
+            log("Screen share stopped via browser");
             toggleScreenShare(false); 
           };
         }
       }
 
-      // Stop old tracks
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(t => t.stop());
       }
 
-      // Update Refs
       localStreamRef.current = newStream;
       onLocalStream?.(newStream);
       startLocalVAD(newStream);
 
-      // Apply Mute
       newStream.getAudioTracks().forEach(t => t.enabled = !muted);
 
-      // Update Existing Peers
+      // Update Peers
       const audioTrack = newStream.getAudioTracks()[0];
       const videoTrack = newStream.getVideoTracks()[0];
 
-      for (const [peerId, pc] of Object.entries(peersRef.current)) {
+      for (const pc of Object.values(peersRef.current)) {
         const senders = pc.getSenders();
-        
         const audioSender = senders.find(s => s.track?.kind === 'audio');
+        const videoSender = senders.find(s => s.track?.kind === 'video');
+
         if (audioSender && audioTrack) await audioSender.replaceTrack(audioTrack);
         else if (audioTrack) pc.addTrack(audioTrack, newStream);
 
-        const videoSender = senders.find(s => s.track?.kind === 'video');
-        if (videoSender) {
-            await videoSender.replaceTrack(videoTrack || null);
-        } else if (videoTrack) {
-            pc.addTrack(videoTrack, newStream);
-        }
+        if (videoSender) await videoSender.replaceTrack(videoTrack || null);
+        else if (videoTrack) pc.addTrack(videoTrack, newStream);
       }
 
     } catch (err) {
-      console.error("Media Error:", err);
+      console.error("Media Error", err);
       if (overrides.screen) toggleScreenShare(false);
       if (overrides.video) toggleCamera(false);
-      toast.error("Failed to access device");
+      toast.error("Could not start video/audio");
     }
   };
 
@@ -177,8 +169,7 @@ export default function VoiceChat({
     stopLocalVAD();
     if (!stream) return;
     try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      const ctx = new AudioCtx();
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
       const src = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
@@ -204,9 +195,15 @@ export default function VoiceChat({
   };
 
   // ==========================================
-  // 4. WebRTC & Socket (FIXED for Race Conditions)
+  // 4. WebRTC Core
   // ==========================================
-  const createPeer = (peerId) => {
+  
+  /**
+   * createPeer
+   * @param {string} peerId 
+   * @param {boolean} initiator - True if this side is responsible for starting the call
+   */
+  const createPeer = (peerId, initiator = false) => {
     if (peersRef.current[peerId]) return peersRef.current[peerId];
     
     const pc = new RTCPeerConnection(STUN_CONFIG);
@@ -217,7 +214,9 @@ export default function VoiceChat({
     }
 
     pc.onicecandidate = (e) => {
-      if (e.candidate) socketRef.current.emit("voice-ice", { target: peerId, candidate: e.candidate });
+      if (e.candidate && socketRef.current) {
+        socketRef.current.emit("voice-ice", { target: peerId, candidate: e.candidate });
+      }
     };
 
     pc.ontrack = (ev) => {
@@ -226,45 +225,64 @@ export default function VoiceChat({
     };
 
     pc.onnegotiationneeded = async () => {
+       // FIX: If we are the "Loser" (not initiator) and we haven't connected yet,
+       // we MUST NOT send an offer. We must wait for the Winner's offer.
+       // This prevents "Double Offer" (Glare) issues.
+       if (!initiator && pc.signalingState === "stable" && !pc.remoteDescription) {
+         return; 
+       }
+
        if (pc.signalingState !== "stable") return;
+       
        try {
          const offer = await pc.createOffer();
          await pc.setLocalDescription(offer);
          socketRef.current.emit("voice-offer", { target: peerId, offer });
-       } catch (e) {}
+       } catch (e) { console.error("Negotiation failed", e); }
     };
 
     return pc;
   };
 
-  // --- Socket Handlers ---
-  const handleExisting = async ({ peers }) => {
+  // --- Signaling Handlers ---
+
+  // Winner logic: High ID sends offer
+  const handleExisting = ({ peers }) => {
     const myId = socketRef.current?.id;
     if (!myId) return;
-    for (const peerId of peers) {
+    peers.forEach(peerId => {
       if (myId > peerId) {
-        createPeer(peerId); // We offer
+        // We are Winner: Create peer as initiator (will trigger negotiationneeded -> Offer)
+        createPeer(peerId, true);
       } else {
-        createPeer(peerId); // We answer
+        // We are Loser: Create peer as passive (wait for offer)
+        createPeer(peerId, false);
       }
+    });
+  };
+
+  const handlePeerJoined = ({ socketId }) => {
+    const myId = socketRef.current?.id;
+    if (!myId) return;
+    if (myId > socketId) {
+      createPeer(socketId, true);
+    } else {
+      createPeer(socketId, false);
     }
   };
 
-  // FIXED: Handle ICE buffer to prevent "Remote description null" error
   const handleOffer = async ({ from, offer }) => {
-    const pc = createPeer(from);
+    // We are receiving an offer, so we are definitely NOT the initiator for this specific flow
+    const pc = createPeer(from, false);
     
-    // If we are currently negotiating, ignore to avoid conflicts (simple mesh strategy)
-    if (pc.signalingState !== "stable" && pc.signalingState !== "have-remote-offer") return;
-
+    // Guard against glare: if we are not stable and not expecting an offer, we might have issues.
+    // But with the initiator logic above, this shouldn't happen.
     await pc.setRemoteDescription(offer);
     
-    // Process Buffered ICE Candidates NOW that remote description is set
+    // Process Buffered ICE
     if (pendingCandidatesRef.current[from]) {
       for (const c of pendingCandidatesRef.current[from]) {
-        try {
-           await pc.addIceCandidate(c);
-        } catch (e) { console.warn("Buffered ICE failed", e); }
+        await pc.addIceCandidate(c).catch(e => console.warn(e));
       }
       delete pendingCandidatesRef.current[from];
     }
@@ -278,25 +296,24 @@ export default function VoiceChat({
     const pc = peersRef.current[from];
     if (pc) {
       await pc.setRemoteDescription(answer);
-      // Just in case candidates arrived for the answerer too
+      
+      // FIX: Flush buffer here too! Candidates might have arrived before the Answer.
       if (pendingCandidatesRef.current[from]) {
-        for (const c of pendingCandidatesRef.current[from]) await pc.addIceCandidate(c).catch(e => {});
+        for (const c of pendingCandidatesRef.current[from]) {
+           await pc.addIceCandidate(c).catch(e => console.warn(e));
+        }
         delete pendingCandidatesRef.current[from];
       }
     }
   };
 
-  // FIXED: Check for remoteDescription before adding candidate
   const handleIce = async ({ from, candidate }) => {
     const pc = peersRef.current[from];
-    
+    // Only add if we know who we are talking to (RemoteDescription set)
     if (pc && pc.remoteDescription) {
-      // Safe to add
-      try {
-        await pc.addIceCandidate(candidate);
-      } catch (e) { console.warn("ICE Add Failed", e); }
+      await pc.addIceCandidate(candidate).catch(e => console.warn(e));
     } else {
-      // Buffer it
+      // Otherwise buffer it
       if (!pendingCandidatesRef.current[from]) pendingCandidatesRef.current[from] = [];
       pendingCandidatesRef.current[from].push(candidate);
     }
@@ -310,32 +327,32 @@ export default function VoiceChat({
       delete copy[socketId];
       return copy;
     });
+    toast(`${socketId.slice(0,4)} left`);
   };
 
   useEffect(() => {
     const s = socketRef.current;
     if (!s) return;
     s.on("voice-existing-peers", handleExisting);
+    s.on("voice-peer-joined", handlePeerJoined);
     s.on("voice-offer", handleOffer);
     s.on("voice-answer", handleAnswer);
     s.on("voice-ice", handleIce);
     s.on("voice-peer-left", handlePeerLeft);
-    s.on("voice-peer-joined", ({ socketId }) => createPeer(socketId));
 
     return () => {
       s.off("voice-existing-peers", handleExisting);
+      s.off("voice-peer-joined", handlePeerJoined);
       s.off("voice-offer", handleOffer);
       s.off("voice-answer", handleAnswer);
       s.off("voice-ice", handleIce);
       s.off("voice-peer-left", handlePeerLeft);
-      s.off("voice-peer-joined");
     };
   }, []);
 
   // ==========================================
   // 5. Actions
   // ==========================================
-  
   const joinVoice = async () => {
     joinedRef.current = true; 
     await updateLocalMedia();
@@ -375,7 +392,6 @@ export default function VoiceChat({
 
   const toggleCamera = async (forceState = null) => {
     if (isScreenSharingRef.current && forceState !== false) return toast.error("Stop screen share first");
-    
     const next = forceState !== null ? forceState : !camEnabled;
     setCamEnabled(next);
     isCamEnabledRef.current = next;
@@ -386,7 +402,6 @@ export default function VoiceChat({
     const next = forceState !== null ? forceState : !isScreenSharing;
     setIsScreenSharing(next);
     isScreenSharingRef.current = next;
-    
     if (next) {
       setCamEnabled(false);
       isCamEnabledRef.current = false;
@@ -421,14 +436,15 @@ export default function VoiceChat({
             value={selectedMic} 
             onChange={e => setSelectedMicLocal(e.target.value)}
             className="bg-[#161b22] border border-gray-700 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none truncate"
+            title="Microphone"
          >
             {devices.mics.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label || "Mic"}</option>)}
          </select>
-
          <select 
             value={selectedCam} 
             onChange={e => setSelectedCam(e.target.value)}
             className="bg-[#161b22] border border-gray-700 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none truncate"
+            title="Camera"
          >
             {devices.cams.length === 0 && <option value="">No Cam</option>}
             {devices.cams.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label || "Cam"}</option>)}
@@ -445,15 +461,12 @@ export default function VoiceChat({
             <button onClick={toggleMute} className={`py-1.5 rounded font-medium transition-all border border-transparent ${muted ? "bg-red-900/30 text-red-400 border-red-800" : "bg-gray-800 hover:bg-gray-700"}`}>
               {muted ? "Unmute" : "Mute"}
             </button>
-            
             <button onClick={leaveVoice} className="bg-red-600 hover:bg-red-700 text-white py-1.5 rounded font-medium transition-all">
               Leave
             </button>
-            
             <button onClick={() => toggleCamera()} disabled={isScreenSharing} className={`py-1.5 rounded font-medium transition-all ${camEnabled ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20" : "bg-gray-800 hover:bg-gray-700"}`}>
               {camEnabled ? "Stop Video" : "Video"}
             </button>
-            
             <button onClick={() => toggleScreenShare()} className={`py-1.5 rounded font-medium transition-all ${isScreenSharing ? "bg-purple-600 text-white shadow-lg shadow-purple-500/20" : "bg-gray-800 hover:bg-gray-700"}`}>
               {isScreenSharing ? "Stop Share" : "Share"}
             </button>
