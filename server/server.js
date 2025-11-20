@@ -12,7 +12,7 @@ import recordRouter from "./routes/recordRouter.js";
 
 app.use(
     cors({
-        origin: ["http://localhost:5173", "https://collaborative-code-editor-pearl.vercel.app "] ,
+        origin: "https://collaborative-code-editor-pearl.vercel.app ",
         credentials: true,
     })
 );
