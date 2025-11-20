@@ -12,7 +12,7 @@ import recordRouter from "./routes/recordRouter.js";
 
 app.use(
     cors({
-        origin: "https://collaborative-code-editor-pearl.vercel.app",
+        origin: ["http://localhost:5173", "https://collaborative-code-editor-pearl.vercel.app "] ,
         credentials: true,
     })
 );
@@ -30,5 +30,5 @@ app.use("/record", recordRouter);
 
 server.listen(5000, () => {
   Connect();
-  console.log("🚀 Server is running on port 5000");
+  console.log(" Server is running on port 5000");
 });

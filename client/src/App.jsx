@@ -13,19 +13,16 @@ function App() {
   return (
     <>
       <div>
-        <Toaster
-          position="top-center"
-          toastOptions={{
-            success: {
-              theme: {
-                primary: "#4aed88",
-              },
-            },
-          }}
-        ></Toaster>
+       
       </div>
       <BrowserRouter>
         <RecoilRoot>
+          <Toaster
+          position="top-center"
+          toastOptions={{
+            success: { theme: { primary: "#4aed88" } },
+          }}
+        />
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/room/:username" element={<Home />} />
