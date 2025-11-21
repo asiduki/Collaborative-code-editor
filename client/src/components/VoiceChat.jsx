@@ -59,7 +59,24 @@ export default function VoiceChat({
   const log = (...args) => console.log("[VoiceChat]", ...args);
 
   // ==========================================
-  // 1. Device Logic
+  // 1. Helper: Black Video Track (Fixes Frozen Frame)
+  // ==========================================
+  const createBlackVideoTrack = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 640;
+    canvas.height = 480;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, 640, 480);
+    // Capture at 1 FPS to save bandwidth
+    const stream = canvas.captureStream(1);
+    const track = stream.getVideoTracks()[0];
+    track.enabled = true;
+    return track;
+  };
+
+  // ==========================================
+  // 2. Device Logic
   // ==========================================
   const refreshDevices = async () => {
     try {
@@ -89,7 +106,7 @@ export default function VoiceChat({
   }, []);
 
   // ==========================================
-  // 2. Media Acquisition
+  // 3. Media Acquisition
   // ==========================================
   const updateLocalMedia = async (overrides = {}) => {
     if (!joinedRef.current) return;
@@ -123,6 +140,13 @@ export default function VoiceChat({
         }
       }
 
+      // FIX: If Video is OFF, inject a Black Track instead of nothing.
+      // This forces the remote video element to render black pixels instead of freezing.
+      if (!targetScreen && !targetVideo) {
+        const blackTrack = createBlackVideoTrack();
+        newStream.addTrack(blackTrack);
+      }
+
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(t => t.stop());
       }
@@ -131,6 +155,7 @@ export default function VoiceChat({
       onLocalStream?.(newStream);
       startLocalVAD(newStream);
 
+      // Apply Mute
       newStream.getAudioTracks().forEach(t => t.enabled = !muted);
 
       // Update Peers
@@ -163,7 +188,7 @@ export default function VoiceChat({
   }, [selectedMic, selectedCam]);
 
   // ==========================================
-  // 3. VAD (Visualizer)
+  // 4. VAD (Visualizer)
   // ==========================================
   const startLocalVAD = (stream) => {
     stopLocalVAD();
@@ -195,14 +220,8 @@ export default function VoiceChat({
   };
 
   // ==========================================
-  // 4. WebRTC Core
+  // 5. WebRTC Core
   // ==========================================
-  
-  /**
-   * createPeer
-   * @param {string} peerId 
-   * @param {boolean} initiator - True if this side is responsible for starting the call
-   */
   const createPeer = (peerId, initiator = false) => {
     if (peersRef.current[peerId]) return peersRef.current[peerId];
     
@@ -225,9 +244,7 @@ export default function VoiceChat({
     };
 
     pc.onnegotiationneeded = async () => {
-       // FIX: If we are the "Loser" (not initiator) and we haven't connected yet,
-       // we MUST NOT send an offer. We must wait for the Winner's offer.
-       // This prevents "Double Offer" (Glare) issues.
+       // If Loser, block auto-offer to prevent Glare
        if (!initiator && pc.signalingState === "stable" && !pc.remoteDescription) {
          return; 
        }
@@ -245,18 +262,14 @@ export default function VoiceChat({
   };
 
   // --- Signaling Handlers ---
-
-  // Winner logic: High ID sends offer
   const handleExisting = ({ peers }) => {
     const myId = socketRef.current?.id;
     if (!myId) return;
     peers.forEach(peerId => {
       if (myId > peerId) {
-        // We are Winner: Create peer as initiator (will trigger negotiationneeded -> Offer)
-        createPeer(peerId, true);
+        createPeer(peerId, true); // Winner = Initiator
       } else {
-        // We are Loser: Create peer as passive (wait for offer)
-        createPeer(peerId, false);
+        createPeer(peerId, false); // Loser = Passive
       }
     });
   };
@@ -272,14 +285,9 @@ export default function VoiceChat({
   };
 
   const handleOffer = async ({ from, offer }) => {
-    // We are receiving an offer, so we are definitely NOT the initiator for this specific flow
     const pc = createPeer(from, false);
-    
-    // Guard against glare: if we are not stable and not expecting an offer, we might have issues.
-    // But with the initiator logic above, this shouldn't happen.
     await pc.setRemoteDescription(offer);
     
-    // Process Buffered ICE
     if (pendingCandidatesRef.current[from]) {
       for (const c of pendingCandidatesRef.current[from]) {
         await pc.addIceCandidate(c).catch(e => console.warn(e));
@@ -296,8 +304,6 @@ export default function VoiceChat({
     const pc = peersRef.current[from];
     if (pc) {
       await pc.setRemoteDescription(answer);
-      
-      // FIX: Flush buffer here too! Candidates might have arrived before the Answer.
       if (pendingCandidatesRef.current[from]) {
         for (const c of pendingCandidatesRef.current[from]) {
            await pc.addIceCandidate(c).catch(e => console.warn(e));
@@ -309,11 +315,9 @@ export default function VoiceChat({
 
   const handleIce = async ({ from, candidate }) => {
     const pc = peersRef.current[from];
-    // Only add if we know who we are talking to (RemoteDescription set)
     if (pc && pc.remoteDescription) {
       await pc.addIceCandidate(candidate).catch(e => console.warn(e));
     } else {
-      // Otherwise buffer it
       if (!pendingCandidatesRef.current[from]) pendingCandidatesRef.current[from] = [];
       pendingCandidatesRef.current[from].push(candidate);
     }
@@ -351,7 +355,7 @@ export default function VoiceChat({
   }, []);
 
   // ==========================================
-  // 5. Actions
+  // 6. Actions
   // ==========================================
   const joinVoice = async () => {
     joinedRef.current = true; 
@@ -410,7 +414,7 @@ export default function VoiceChat({
   };
 
   // ==========================================
-  // 6. Render
+  // 7. Render
   // ==========================================
   return (
     <div className="mt-4 p-3 bg-[#0d1117] border-t border-b border-gray-800 text-xs text-white">
@@ -436,7 +440,6 @@ export default function VoiceChat({
             value={selectedMic} 
             onChange={e => setSelectedMicLocal(e.target.value)}
             className="bg-[#161b22] border border-gray-700 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none truncate"
-            title="Microphone"
          >
             {devices.mics.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label || "Mic"}</option>)}
          </select>
@@ -444,7 +447,6 @@ export default function VoiceChat({
             value={selectedCam} 
             onChange={e => setSelectedCam(e.target.value)}
             className="bg-[#161b22] border border-gray-700 rounded px-2 py-1 text-xs focus:border-blue-500 outline-none truncate"
-            title="Camera"
          >
             {devices.cams.length === 0 && <option value="">No Cam</option>}
             {devices.cams.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label || "Cam"}</option>)}
