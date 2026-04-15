@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { v4 as uuidV4 } from "uuid";
 import toast from "react-hot-toast";
 import { useNavigate, useParams } from "react-router-dom";
+import axios from "axios";
 
 function Form() {
   const navigate = useNavigate();
@@ -15,25 +16,36 @@ function Form() {
     toast.success("New room created");
   };
 
-  const joinRoom = () => {
+  const joinRoom = async () => {
     if (!roomId || !username) {
       toast.error("Room ID & username required");
       return;
     }
 
-    navigate(`/editor/${roomId}`, {
-      state: { username },
-    });
+    try {
+      // 🔥 SAVE ROOM TO DATABASE
+      await axios.post(
+        `${import.meta.env.VITE_API_URL}/record/create-room`,
+        { roomId },
+        { withCredentials: true },
+      );
+
+      toast.success("Joined room");
+
+      navigate(`/editor/${roomId}`, {
+        state: { username },
+      });
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to join room");
+    }
   };
 
   return (
     <div className="w-full space-y-6">
-
       {/* 🔥 TITLE */}
       <div>
-        <h2 className="text-xl font-semibold">
-          Create or Join Room
-        </h2>
+        <h2 className="text-xl font-semibold">Create or Join Room</h2>
         <p className="text-sm text-gray-400 mt-1">
           Enter a room ID or generate a new one
         </p>
@@ -71,7 +83,6 @@ function Form() {
       <p className="text-xs text-gray-500 text-center">
         Share your room ID with your team to collaborate
       </p>
-
     </div>
   );
 }
