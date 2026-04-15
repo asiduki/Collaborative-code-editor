@@ -2,7 +2,6 @@ import UserModel from "../models/UserSchema.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
-
 export const register = async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -19,6 +18,18 @@ export const register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const user = new UserModel({ username, password: hashedPassword });
     await user.save();
+    const token = jwt.sign(
+      { username: user.username, id: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" },
+    );
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: false,
+      sameSite: "None",
+      maxAge: 86400000,
+    });
 
     return res.status(201).json({ msg: "User registered successfully" });
   } catch (error) {
@@ -48,17 +59,19 @@ export const login = async (req, res) => {
     const token = jwt.sign(
       { username: user.username, id: user._id },
       process.env.JWT_SECRET,
-      { expiresIn: "1d" }
+      { expiresIn: "1d" },
     );
 
     res.cookie("token", token, {
       httpOnly: true,
       secure: false,
-      sameSite: "Lax",
-      maxAge: 86400000, 
+      sameSite: "None",
+      maxAge: 86400000,
     });
 
-    return res.status(200).json({ msg: "Login successful", user: user.username });
+    return res
+      .status(200)
+      .json({ msg: "Login successful", user: user.username });
   } catch (error) {
     console.error("Login error:", error);
     if (!res.headersSent) {
@@ -70,11 +83,8 @@ export const login = async (req, res) => {
 export const logout = (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
-    secure: false, 
-    sameSite: "Lax",
+    secure: false,
+    sameSite: "None",
   });
   res.status(200).json({ msg: "Logged out" });
 };
-
-
-
