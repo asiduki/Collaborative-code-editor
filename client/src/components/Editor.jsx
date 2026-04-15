@@ -4,6 +4,9 @@ import { language, cmtheme, data } from "../atoms";
 import ACTIONS from "../actions/Actions";
 import axios from "axios";
 import Codemirror from "codemirror";
+import { languageOptions } from "../constants/languageOptions";
+import ConvertButton from "./ConvertButton";
+
 
 // Import all necessary CodeMirror assets
 import "codemirror/lib/codemirror.css";
@@ -24,6 +27,8 @@ const Editor = ({ socketRef, roomId, onCodeChange, onOutputUpdate }) => {
   const [codeData, setCodeData] = useRecoilState(data);
   const [processing, setProcessing] = useState(false);
   const skipEmit = useRef(false);
+const currentLangLabel =
+  languageOptions.find((l) => l.value === lang.value)?.label || lang.value;
 
   // Effect for initializing the editor
   useEffect(() => {
@@ -173,14 +178,20 @@ const Editor = ({ socketRef, roomId, onCodeChange, onOutputUpdate }) => {
             <span>
               Language:
               <span className="bg-blue-700 ml-2 px-2 py-1 rounded">
-                {lang?.label || "N/A"}
+                {currentLangLabel}
               </span>
             </span>
             <span>
               Theme:
               <span className="bg-purple-700 ml-2 px-2 py-1 rounded">
                 {theme}
+                
               </span>
+            </span>
+            <span>
+              
+          {/* <ConvertButton code={codeData} onConverted={(out) => setConvertedCode(out)} /> */}
+              
             </span>
           </div>
           <button

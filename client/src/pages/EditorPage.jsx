@@ -12,6 +12,10 @@ import VideoPanel from "../components/VideoPanel";
 import { useLocation, useNavigate, Navigate, useParams } from "react-router-dom";
 import { languageOptions } from "../constants/languageOptions";
 import axios from "axios";
+import ConvertButton from "../components/ConvertButton";
+import DualConverter from "../components/DualConverter";
+import { detectLanguage } from "../utils/detectLanguage";
+
 
 const EditorPage = () => {
   const [lang, setLang] = useRecoilState(language);
@@ -32,14 +36,41 @@ const EditorPage = () => {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStreamsMap, setRemoteStreamsMap] = useState({});
   const [selectedSpeaker, setSelectedSpeaker] = useState("");
-  const [localLevel, setLocalLevel] = useState(0); // passed to VideoPanel
+  const [localLevel, setLocalLevel] = useState(0);
+
+  // Converted Code State
+  const [convertedCode, setConvertedCode] = useState("");
+  console.log(convertedCode);
+  // Keep track of last detected language to avoid repeated setLang/toast spam
+  const prevDetectedRef = useRef("");
+
+  // Apply detected language safely (no spam)
+  const applyDetected = (detected, showToast = true) => {
+    if (!detected) return;
+    if (prevDetectedRef.current === detected) return; // nothing changed
+
+    const match = languageOptions.find((l) => l.value === detected);
+    if (match) {
+      setLang({ id: match.id, value: match.value });
+      prevDetectedRef.current = detected;
+      if (showToast) toast.success(`Language detected: ${match.label}`);
+    } else {
+      // If no exact mapping, optionally notify once
+      if (showToast) toast("Could not precisely detect language — select manually.", { icon: "⚠️" });
+    }
+  };
 
   useEffect(() => {
     if (!them) setThem("dracula");
+    // If lang not set, set a default (avoid uncontrolled value in <select>)
+    if (!lang || !lang.value) {
+      const defaultOpt = languageOptions[0];
+      if (defaultOpt) setLang({ id: defaultOpt.id, value: defaultOpt.value });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    // initialize socket once
     const init = async () => {
       try {
         if (!socketRef.current) {
@@ -51,12 +82,11 @@ const EditorPage = () => {
         console.error("Socket init failed:", err);
       }
 
-      function handleErrors(e) {
+      function handleErrors() {
         toast.error("Socket connection failed.");
         navigate("/");
       }
 
-      // join collaborative room
       socketRef.current.emit(ACTIONS.JOIN, {
         roomId,
         username: location.state?.username,
@@ -67,7 +97,7 @@ const EditorPage = () => {
           toast.success(`${joinedUser} joined the room.`);
         }
         setClients(clients);
-        // sync code with new user
+
         socketRef.current.emit(ACTIONS.SYNC_CODE, {
           code: codeRef.current || codeData || "",
           socketId,
@@ -79,19 +109,30 @@ const EditorPage = () => {
         setClients((prev) => prev.filter((c) => c.socketId !== socketId));
       });
 
+      // When receiving synced code from other clients: set code and detect language
       socketRef.current.on(ACTIONS.SYNC_CODE, ({ code }) => {
         codeRef.current = code;
         setCodeData(code);
+
+        const detected = detectLanguage(code);
+        applyDetected(detected, false); // don't show toast for remote continuous updates
       });
     };
 
     const fetchSavedCode = async () => {
       try {
-        const response = await axios.get(`${import.meta.env.VITE_API_URL}/record/fetch`, { withCredentials: true });
+        const response = await axios.get(`${import.meta.env.VITE_API_URL}/record/fetch`, {
+          withCredentials: true,
+        });
         if (response.status === 200 && response.data.records.length > 0) {
           const latestCode = response.data.records[0].data;
           codeRef.current = latestCode;
           setCodeData(latestCode);
+
+          // Detect language for loaded saved code (show toast)
+          const detected = detectLanguage(latestCode);
+          applyDetected(detected, true);
+
           toast.success("Loaded saved code.");
           if (socketRef.current) {
             socketRef.current.emit(ACTIONS.SYNC_CODE, { code: latestCode, socketId: null });
@@ -115,13 +156,13 @@ const EditorPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // update localStream level for VideoPanel (compute using analyser when VoiceChat calls onLocalStream)
+  // Microphone Level Analyzer (unchanged)
   useEffect(() => {
     if (!localStream) {
       setLocalLevel(0);
       return;
     }
-    // attach analyser to localStream to compute level for VideoPanel
+
     let raf = null;
     let ctx = null;
     try {
@@ -151,28 +192,33 @@ const EditorPage = () => {
     };
   }, [localStream]);
 
-  // Handlers
+  // Handlers for dropdowns / theme
   const handleChangeLang = (e) => {
     const selectedLang = e.target.value;
     const selectedLangId = languageOptions.find((l) => l.value === selectedLang)?.id;
     if (selectedLangId) {
       setLang({ id: selectedLangId, value: selectedLang });
+      prevDetectedRef.current = selectedLang; // accept manual selection as "previous"
     }
   };
 
   const handleChangeTheme = (e) => setThem(e.target.value);
 
+  // Save, copy, logout, leave
   const saveCode = async () => {
-    const formData = { username: location.state?.username, roomId, data: codeData };
+    const formData = {
+      username: location.state?.username,
+      roomId,
+      data: codeData,
+    };
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_URL}/record/save`, formData, { withCredentials: true });
+      const response = await axios.post(`${import.meta.env.VITE_API_URL}/record/save`, formData, {
+        withCredentials: true,
+      });
       if (response.status === 201 || response.status === 200) toast.success("Code saved successfully.");
-      else toast.error("Unexpected response from server.");
+      else toast.error("Unexpected response.");
     } catch (err) {
-      if (err.response?.status === 401) {
-        toast.error("Unauthorized. Please log in.");
-        navigate("/");
-      } else toast.error("Failed to save code.");
+      toast.error("Failed to save code.");
     }
   };
 
@@ -188,11 +234,10 @@ const EditorPage = () => {
   const handleLogout = async () => {
     try {
       await axios.post(`${import.meta.env.VITE_API_URL}/user/logout`, {}, { withCredentials: true });
-      toast.success("Logged out successfully.");
+      toast.success("Logged out.");
       navigate("/login");
     } catch (err) {
       toast.error("Logout failed.");
-      console.error("Logout error:", err);
     }
   };
 
@@ -209,7 +254,6 @@ const EditorPage = () => {
           <p className="text-sm text-gray-400">Collaborate & Code</p>
         </div>
 
-        {/* VoiceChat only when socket is ready */}
         {socketRef.current && (
           <VoiceChat
             socketRef={socketRef}
@@ -217,7 +261,6 @@ const EditorPage = () => {
             localUserName={location.state?.username}
             onLocalStream={(s) => setLocalStream(s)}
             onRemoteStreamsUpdate={(updater) => {
-              // updater can be object or function depending on VoiceChat calls
               if (typeof updater === "function") setRemoteStreamsMap((prev) => updater(prev));
               else setRemoteStreamsMap(updater);
             }}
@@ -226,52 +269,55 @@ const EditorPage = () => {
           />
         )}
 
-        {/* Language + theme + buttons */}
+        {/* LANGUAGE + THEME */}
         <div className="mt-6">
           <label className="text-white text-sm font-medium">Language:</label>
-          <select value={lang.value} onChange={handleChangeLang} className="w-full mb-4 px-3 py-2 rounded-md text-sm bg-[#1e293b] text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-            {languageOptions.map((l, id) => (
-              <option key={id} value={l.value} className="text-black">
+          <select
+            value={lang?.value || ""}
+            onChange={handleChangeLang}
+            className="w-full mb-4 px-3 py-2 rounded-md text-sm bg-[#1e293b]"
+          >
+            {languageOptions.map((l) => (
+              <option key={l.id} value={l.value} className="text-black">
                 {l.label}
               </option>
             ))}
           </select>
 
           <label className="text-white text-sm font-medium">Theme:</label>
-          <select value={them} onChange={handleChangeTheme} className="w-full mb-6 px-3 py-2 rounded-md text-sm bg-[#1e293b] text-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          <select value={them} onChange={handleChangeTheme} className="w-full mb-6 px-3 py-2 rounded-md text-sm bg-[#1e293b]">
             <option value="material">material</option>
             <option value="dracula">dracula</option>
             <option value="ayu-dark">ayu-dark</option>
             <option value="monokai">monokai</option>
             <option value="nord">nord</option>
           </select>
+          
+       
         </div>
 
+        {/* BUTTONS */}
         <div className="flex flex-col gap-3">
-          <button className="bg-green-500 hover:bg-green-600 text-white py-2 rounded text-sm font-semibold" onClick={saveCode}>
+          <button className="bg-green-500 hover:bg-green-600 py-2 rounded text-sm font-semibold" onClick={saveCode}>
             📁 Save
           </button>
-
-          <button className="bg-blue-500 hover:bg-blue-600 text-white py-2 rounded text-sm font-semibold" onClick={copyRoomId}>
+          <button className="bg-blue-500 hover:bg-blue-600 py-2 rounded text-sm font-semibold" onClick={copyRoomId}>
             📋 Copy Room ID
           </button>
-
-          <button className="bg-yellow-600 hover:bg-yellow-700 text-white py-2 rounded text-sm font-semibold" onClick={handleLogout}>
+          <button className="bg-yellow-600 hover:bg-yellow-700 py-2 rounded text-sm font-semibold" onClick={handleLogout}>
             🔓 Logout
           </button>
-
-          <button className="bg-red-500 hover:bg-red-600 text-white py-2 rounded text-sm font-semibold" onClick={leaveRoom}>
+          <button className="bg-red-500 hover:bg-red-600 py-2 rounded text-sm font-semibold" onClick={leaveRoom}>
             🚪 Leave Room
           </button>
-        </div>
+        </div>        
 
+        {/* Connected Users */}
         <div className="mt-6">
           <h2 className="text-white text-sm font-medium mb-2">Connected Users:</h2>
           <ul className="text-white text-sm space-y-1">
             {clients.map((client) => (
-              <li key={client.socketId} className="truncate">
-                🔹 {client.username}
-              </li>
+              <li key={client.socketId}>🔹 {client.username}</li>
             ))}
           </ul>
         </div>
@@ -286,14 +332,31 @@ const EditorPage = () => {
             onCodeChange={(code) => {
               codeRef.current = code;
               setCodeData(code);
+
+              // Auto-detect while typing, don't show toast for every keystroke
+              const detected = detectLanguage(code);
+              applyDetected(detected, false);
             }}
             onOutputUpdate={setOutputDetails}
           />
         </div>
 
         <div className="w-[35%] h-full overflow-hidden">
-          <VideoPanel localStream={localStream} remoteStreamsMap={remoteStreamsMap} selectedSpeakerDeviceId={selectedSpeaker} localLevel={localLevel} />
+          <VideoPanel
+            localStream={localStream}
+            remoteStreamsMap={remoteStreamsMap}
+            selectedSpeakerDeviceId={selectedSpeaker}
+            localLevel={localLevel}
+          />
           <OutputWindow outputDetails={outputDetails} />
+
+          {/* Converted Code Panel */}
+          {convertedCode && (
+            <div className="bg-[#1e293b] mt-3 p-3 rounded border border-gray-700 overflow-auto max-h-[40%]">
+              <h2 className="text-white font-medium mb-2">Converted Code</h2>
+              <pre className="text-green-400 text-sm whitespace-pre-wrap">{convertedCode}</pre>
+            </div>
+          )}
         </div>
       </div>
     </div>

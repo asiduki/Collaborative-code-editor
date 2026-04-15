@@ -1,10 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Form from "../components/Form";
-import {
-  useParams,
-  useNavigate,
-  useNavigate as useHistory,
-} from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
 
@@ -17,7 +13,6 @@ function Dashboard() {
   const openModal = () => setIsModalOpen(true);
   const closeModal = () => setIsModalOpen(false);
 
-  // Logout handler
   const handleLogout = async () => {
     try {
       await axios.post(`${import.meta.env.VITE_API_URL}/user/logout`, null, {
@@ -25,26 +20,21 @@ function Dashboard() {
       });
       toast.success("Logged out");
       navigate("/login");
-    } catch (error) {
+    } catch {
       toast.error("Logout failed");
-      console.error("Logout error:", error);
     }
   };
 
-  // Fetch rooms from backend
   useEffect(() => {
     const fetchRooms = async () => {
       try {
         const res = await axios.get(
           `${import.meta.env.VITE_API_URL}/record/fetch-rooms`,
-          {
-            withCredentials: true,
-          }
+          { withCredentials: true }
         );
         setRooms(res.data);
-      } catch (err) {
+      } catch {
         toast.error("Failed to load rooms");
-        console.error("Room fetch error:", err);
       }
     };
 
@@ -52,94 +42,101 @@ function Dashboard() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#0f0f0f] to-[#1a1a1a] text-white">
-      {/* Navbar */}
-      <nav className="bg-[#181818] border-b border-gray-800 p-4 px-8 flex justify-between items-center shadow-md">
-        <div className="flex items-center space-x-3">
-          <img
-            src="/logo.png"
-            alt="DevNestLogo"
-            className="w-10 h-10 hover:scale-110 transition"
-          />
-          <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-fuchsia-500">
-            DevNest
+    <div className="min-h-screen bg-[#0a0a0a] text-white flex">
+
+      {/* 🔥 SIDEBAR */}
+      <aside className="w-64 bg-[#111] border-r border-white/10 p-5 flex flex-col justify-between">
+
+        <div>
+          <h1 className="text-xl font-semibold mb-8">
+            Code Collaboration Platform
           </h1>
+
+          <button
+            onClick={openModal}
+            className="w-full py-2 bg-white text-black rounded-lg text-sm font-medium hover:opacity-80 transition"
+          >
+            + New Room
+          </button>
+
+          <div className="mt-8 space-y-2 text-sm text-gray-400">
+            <p>Dashboard</p>
+            <p>Rooms</p>
+          </div>
         </div>
-        <div className="flex items-center space-x-6">
-          <p className="text-lg font-semibold text-gray-300">
-            Logged in as: <span className="text-white">{username}</span>
-          </p>
+
+        <div>
+          <p className="text-xs text-gray-500 mb-3">@{username}</p>
           <button
             onClick={handleLogout}
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md font-semibold transition"
+            className="w-full py-2 bg-red-500 rounded-lg text-sm hover:bg-red-600 transition"
           >
             Logout
           </button>
         </div>
-      </nav>
+      </aside>
 
-      {/* Welcome Message */}
-      <section className="max-w-6xl mx-auto mt-12 px-6">
-        <h2 className="text-4xl md:text-5xl font-bold mb-4">
-          Welcome back, <span className="text-cyan-400">{username}</span> 👋
-        </h2>
-        <p className="text-gray-400 text-lg">
-          Collaborate and build projects in real-time.
-        </p>
+      {/* 🔥 MAIN */}
+      <main className="flex-1 p-8">
 
-        {/* Create / Join Button */}
-        <div className="mt-8">
-          <button
-            onClick={openModal}
-            className="bg-gradient-to-r from-cyan-500 to-fuchsia-500 text-white px-6 py-2 rounded-lg font-medium hover:scale-105 transition"
-          >
-            + Create / Join Room
-          </button>
-        </div>
-      </section>
-
-      {/* Room Cards */}
-      <section className="max-w-6xl mx-auto mt-10 px-6 pb-20">
-        {rooms.length === 0 ? (
-          <p className="text-gray-500 mt-6 text-center">
-            No rooms available. Start one now!
+        {/* HEADER */}
+        <div className="mb-8">
+          <h2 className="text-3xl font-semibold">
+            Your Rooms
+          </h2>
+          <p className="text-gray-400 text-sm">
+            Manage and access your collaboration rooms
           </p>
+        </div>
+
+        {/* ROOMS GRID */}
+        {rooms.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-[60vh] text-gray-500">
+            <p className="text-lg">No rooms yet</p>
+            <p className="text-sm">Create your first room</p>
+          </div>
         ) : (
-          <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mt-8">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+
             {rooms.map((room) => (
               <div
                 key={room.roomId}
                 onClick={() => navigate(`/editor/${room.roomId}`)}
-                className="bg-[#252525] p-6 rounded-lg shadow hover:shadow-lg border border-gray-700 transition-all cursor-pointer"
+                className="p-5 rounded-xl bg-[#151515] hover:bg-[#1c1c1c] transition cursor-pointer border border-white/5"
               >
-                <h3 className="text-xl font-semibold mb-2 text-white">
-                  🔧 Room by {room.createdBy}
+                <p className="text-sm text-gray-400 mb-1">
+                  Created by {room.createdBy}
+                </p>
+
+                <h3 className="text-lg font-medium mb-3">
+                  Room ID
                 </h3>
-                <p className="text-gray-400">
-                  <span className="font-medium text-gray-300">Room ID:</span>{" "}
+
+                <p className="text-sm text-gray-500 break-all">
                   {room.roomId}
                 </p>
               </div>
             ))}
+
           </div>
         )}
-      </section>
+      </main>
 
-      {/* Modal Form */}
+      {/* 🔥 MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-70 flex items-center justify-center">
-          <div className="relative bg-black p-8 rounded-lg shadow-lg max-w-md w-full">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center">
+          <div className="bg-[#121212] p-6 rounded-xl w-full max-w-md border border-white/10">
             <button
               onClick={closeModal}
-              className="absolute top-2 right-3  text-red-500 text-2xl font-bold"
+              className="float-right text-gray-400 hover:text-white"
             >
-              ×
+              ✕
             </button>
             <Form />
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }
 

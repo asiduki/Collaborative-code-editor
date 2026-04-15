@@ -1,78 +1,77 @@
 import React, { useState } from "react";
 import { v4 as uuidV4 } from "uuid";
 import toast from "react-hot-toast";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 function Form() {
   const navigate = useNavigate();
+  const { username } = useParams();
 
   const [roomId, setRoomId] = useState("");
 
-  const { username } = useParams();
-
-  const createNewRoom = (e) => {
-    e.preventDefault();
+  const createNewRoom = () => {
     const id = uuidV4();
     setRoomId(id);
-    toast.success("Created a new room");
+    toast.success("New room created");
   };
 
   const joinRoom = () => {
     if (!roomId || !username) {
-      toast.error("ROOM ID & username is required");
+      toast.error("Room ID & username required");
       return;
     }
 
-    // Redirect
     navigate(`/editor/${roomId}`, {
-      state: {
-        username,
-      },
+      state: { username },
     });
   };
 
-  const handleInputEnter = (e) => {
-    if (e.code === "Enter") {
-      joinRoom();
-    }
-  };
-
-  const str = "DevNest";
-  const alphabetArray = str.split("");
-
   return (
-    <div className="bg-[#1d1a19] text-white p-6 rounded-lg">
-      <div className="flex items-center justify-center cursor-pointer pb-2">
-        <img src="/logo.png" alt=" Logo" className="size-8 hover:scale-125" />
-        {alphabetArray.map((char, index) => (
-          <span
-            className="text-4xl bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent font-bold hover:scale-125"
-            key={index}
-          >
-            {char}
-          </span>
-        ))}
+    <div className="w-full space-y-6">
+
+      {/* 🔥 TITLE */}
+      <div>
+        <h2 className="text-xl font-semibold">
+          Create or Join Room
+        </h2>
+        <p className="text-sm text-gray-400 mt-1">
+          Enter a room ID or generate a new one
+        </p>
       </div>
-      <h4 className="mb-2">Generate new room or paste invitation ROOM ID</h4>
-      <div className="inputGroup">
+
+      {/* 🔥 INPUT */}
+      <div className="relative">
         <input
           type="text"
-          className="inputBox"
-          placeholder="ROOM ID"
-          onChange={(e) => setRoomId(e.target.value)}
+          placeholder="Room ID"
           value={roomId}
-          onKeyUp={handleInputEnter}
+          onChange={(e) => setRoomId(e.target.value)}
+          onKeyDown={(e) => e.code === "Enter" && joinRoom()}
+          className="w-full px-4 py-3 bg-[#0f0f0f] border border-white/10 rounded-lg focus:border-blue-500 outline-none text-sm"
         />
-        <button className="btn joinBtn" onClick={joinRoom}>
-          Join
+
+        {/* Auto fill button */}
+        <button
+          onClick={createNewRoom}
+          className="absolute right-2 top-2 text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded-md transition"
+        >
+          Generate
         </button>
-        <span className="createInfo">
-          If you don't have an invite then create &nbsp;
-          <Link onClick={createNewRoom} href="" className="createNewBtn">
-            new room
-          </Link>
-        </span>
       </div>
+
+      {/* 🔥 ACTION */}
+      <button
+        onClick={joinRoom}
+        className="w-full py-3 bg-white text-black rounded-lg font-medium hover:opacity-90 transition"
+      >
+        Continue →
+      </button>
+
+      {/* 🔥 HINT */}
+      <p className="text-xs text-gray-500 text-center">
+        Share your room ID with your team to collaborate
+      </p>
+
     </div>
   );
 }

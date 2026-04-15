@@ -9,10 +9,11 @@ dotenv.config({ path: "./.env" });
 
 import authRouter from './routes/authRouter.js';
 import recordRouter from "./routes/recordRouter.js";
+import convertRoutes from  "./routes/convertRoutes.js";
 
 app.use(
     cors({
-        origin: "https://collaborative-code-editor-pearl.vercel.app ",
+        origin: ["http://localhost:5173","https://collaborative-code-editor-pearl.vercel.app "],
         credentials: true,
     })
 );
@@ -27,6 +28,7 @@ app.get("/", (req, res) => {
 
 app.use("/user", authRouter);
 app.use("/record", recordRouter);
+app.use("/api", convertRoutes);
 
 server.listen(5000, () => {
   Connect();

@@ -1,79 +1,97 @@
 import React, { useState } from "react";
 import { v4 as uuidV4 } from "uuid";
 import toast from "react-hot-toast";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 const Home = () => {
   const navigate = useNavigate();
+  const { username } = useParams();
 
   const [roomId, setRoomId] = useState("");
-  // const [username, setUsername] = useState("");
 
-  const {username} = useParams()
-  // console.log(username)
-
-  const createNewRoom = (e) => {
-    e.preventDefault();
+  const createNewRoom = () => {
     const id = uuidV4();
     setRoomId(id);
-    toast.success("Created a new room");
+    toast.success("Room created");
   };
 
   const joinRoom = () => {
     if (!roomId || !username) {
-      toast.error("ROOM ID & username is required");
+      toast.error("Room ID & username required");
       return;
     }
 
-    // Redirect
     navigate(`/editor/${roomId}`, {
-      state: {
-        username,
-      },
+      state: { username },
     });
   };
 
-  const handleInputEnter = (e) => {
-    if (e.code === "Enter") {
-      joinRoom();
-    }
-  };
-
   return (
-    <div className="homePageWrapper">
-      <div className="formWrapper">
-        <img className="homePageLogo" src="/logo.png" alt="code-sync-logo" />
-        <h4 className="mainLabel">
-          Generate new room or paste invitation ROOM ID
-        </h4>
-        <div className="inputGroup">
+    <div className="min-h-screen bg-[#0a0a0a] text-white flex">
+
+      {/* 🔥 SAME SIDEBAR AS DASHBOARD */}
+      <aside className="w-64 bg-[#111] border-r border-white/10 p-5 flex flex-col justify-between">
+
+        <div>
+          <h1 className="text-xl font-semibold mb-8">
+            Code Collaboration Platform
+          </h1>
+
+          <div className="text-sm text-gray-400 space-y-2">
+            <p className="text-white">Home</p>
+            <p>Dashboard</p>
+          </div>
+        </div>
+
+        <p className="text-xs text-gray-500">@{username}</p>
+      </aside>
+
+      {/* 🔥 MAIN */}
+      <main className="flex-1 flex items-center justify-center p-8">
+
+        <div className="w-full max-w-md">
+
+          {/* HEADER */}
+          <div className="mb-6">
+            <h2 className="text-3xl font-semibold mb-2">
+              Join a Room
+            </h2>
+            <p className="text-gray-400 text-sm">
+              Enter room ID or create a new one
+            </p>
+          </div>
+
+          {/* INPUT */}
           <input
             type="text"
-            className="inputBox"
-            placeholder="ROOM ID"
-            onChange={(e) => setRoomId(e.target.value)}
+            placeholder="Enter Room ID"
             value={roomId}
-            onKeyUp={handleInputEnter}
+            onChange={(e) => setRoomId(e.target.value)}
+            onKeyUp={(e) => e.code === "Enter" && joinRoom()}
+            className="w-full px-4 py-3 mb-4 bg-[#111] border border-white/10 rounded-lg focus:border-blue-500 outline-none"
           />
-          {/* <input
-            type="text"
-            className="inputBox"
-            placeholder="USERNAME"
-            onChange={(e) => setUsername(e.target.value)}
-            value={username}
-            onKeyUp={handleInputEnter}
-          /> */}
-          <button className="btn joinBtn" onClick={joinRoom}>
-            Join
-          </button>
-          <span className="createInfo">
-            If you don't have an invite then create &nbsp;
-            <Link onClick={createNewRoom} href="" className="createNewBtn">
-              new room
-            </Link>
-          </span>
+
+          {/* BUTTONS */}
+          <div className="flex gap-3">
+
+            <button
+              onClick={joinRoom}
+              className="flex-1 py-3 bg-white text-black rounded-lg hover:opacity-90 transition"
+            >
+              Join Room
+            </button>
+
+            <button
+              onClick={createNewRoom}
+              className="flex-1 py-3 border border-white/20 rounded-lg hover:bg-white/10 transition"
+            >
+              New Room
+            </button>
+
+          </div>
+
         </div>
-      </div>
+      </main>
     </div>
   );
 };
