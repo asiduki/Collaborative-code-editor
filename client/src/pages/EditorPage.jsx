@@ -22,7 +22,6 @@ const EditorPage = () => {
   const [them, setThem] = useRecoilState(cmtheme);
   const [codeData, setCodeData] = useRecoilState(data);
   const loggedUser = useRecoilValue(username);
-
   const [clients, setClients] = useState([]);
   const [outputDetails, setOutputDetails] = useState(null);
   const socketRef = useRef(null);
@@ -234,14 +233,48 @@ const EditorPage = () => {
   const handleLogout = async () => {
     try {
       await axios.post(`${import.meta.env.VITE_API_URL}/user/logout`, {}, { withCredentials: true });
+      localStorage.removeItem("username");
       toast.success("Logged out.");
-      navigate("/login");
+      navigate("/");
     } catch (err) {
       toast.error("Logout failed.");
     }
   };
 
-  const leaveRoom = () => navigate(`/dashboard/${loggedUser}`);
+  const leaveRoom = () => {
+  try {
+    // 1. Disconnect socket (VERY IMPORTANT)
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+
+    // 2. Get username from all possible sources
+    const storedUser = localStorage.getItem("username");
+    const user =
+      loggedUser ||
+      location.state?.username ||
+      storedUser;
+
+    // 3. Debug (you can remove later)
+    console.log("Recoil:", loggedUser);
+    console.log("Location:", location.state?.username);
+    console.log("LocalStorage:", storedUser);
+
+    // 4. Safety check
+    if (!user) {
+      toast.error("User not found. Redirecting...");
+      navigate("/");
+      return;
+    }
+
+    // 5. Navigate properly
+    navigate(`/dashboard/${user}`);
+
+  } catch (error) {
+    console.error("Leave room error:", error);
+    toast.error("Error leaving room");
+  }
+};
 
   if (!location.state) return <Navigate to="/" />;
 

@@ -61,6 +61,7 @@ const Register = () => {
         );
 
         if (loginRes.status === 200) {
+           localStorage.setItem("username", data.username);
           navigate(`/dashboard/${data.username}`);
         }
       }

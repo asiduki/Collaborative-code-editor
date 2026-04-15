@@ -18,8 +18,9 @@ function Dashboard() {
       await axios.post(`${import.meta.env.VITE_API_URL}/user/logout`, null, {
         withCredentials: true,
       });
+      localStorage.removeItem("username");
       toast.success("Logged out");
-      navigate("/login");
+      navigate("/");
     } catch {
       toast.error("Logout failed");
     }

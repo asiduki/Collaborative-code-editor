@@ -48,6 +48,7 @@ const Login = () => {
       );
 
       if (res.status === 200) {
+         localStorage.setItem("username", data.username);
         navigate(`/dashboard/${data.username}`);
       }
     } catch {
