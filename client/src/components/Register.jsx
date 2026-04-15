@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { Eye, EyeOff } from "lucide-react";
 import axios from "axios";
+import { motion } from "framer-motion";
+import { FaJs, FaPython, FaJava, FaHtml5, FaCss3Alt } from "react-icons/fa";
+import { SiCplusplus } from "react-icons/si";
 
 const Register = () => {
   const {
@@ -17,12 +20,28 @@ const Register = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [usernameError, setUsernameError] = useState("");
 
-  const username = watch("username");
   const password = watch("password");
 
-  useEffect(() => {
-    if (username) setUsernameError("");
-  }, [username]);
+  const icons = [FaJs, FaPython, FaJava, SiCplusplus, FaHtml5, FaCss3Alt];
+
+  const colors = [
+    "#facc15",
+    "#3b82f6",
+    "#ef4444",
+    "#a855f7",
+    "#22c55e",
+    "#f97316",
+  ];
+
+  const [drops] = useState(() =>
+    Array.from({ length: 20 }).map((_, i) => ({
+      left: Math.random() * 100,
+      delay: Math.random() * 5,
+      duration: 4 + Math.random() * 4,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      Icon: icons[i % icons.length],
+    }))
+  );
 
   const onSubmit = async (data) => {
     try {
@@ -30,17 +49,15 @@ const Register = () => {
         `${import.meta.env.VITE_API_URL}/user/register`,
         data
       );
+
       if (res.status === 201) {
-        // Auto login after register
         const loginRes = await axios.post(
           `${import.meta.env.VITE_API_URL}/user/login`,
           {
             username: data.username,
             password: data.password,
           },
-          {
-            withCredentials: true,
-          }
+          { withCredentials: true }
         );
 
         if (loginRes.status === 200) {
@@ -50,137 +67,166 @@ const Register = () => {
     } catch (error) {
       if (error.response?.status === 409) {
         setUsernameError("Username already exists");
-      } else {
-        console.error("Registration failed:", error);
       }
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-gray-500 to-black">
-      <div className="w-full max-w-4xl bg-white shadow-2xl rounded-lg overflow-hidden flex flex-col md:flex-row">
-        {/* Left Panel */}
-        <div className="hidden md:flex md:w-1/2 bg-gradient-to-br from-black via-gray-500 to-white items-center justify-center p-10 text-white">
-          <div className="text-center">
-            <h1 className="text-3xl font-bold mb-3">Join DevNest</h1>
-            <p className="text-lg">
-              Register to build, share, and collaborate on code effortlessly.
-            </p>
-          </div>
+    <div className="min-h-screen bg-black text-white flex relative overflow-hidden">
+
+      {/* 🌧️ ICON RAIN */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        {drops.map((drop, i) => {
+          const Icon = drop.Icon;
+          return (
+            <motion.div
+              key={i}
+              className="absolute text-3xl opacity-70 drop-shadow-[0_0_8px_currentColor]"
+              style={{
+                left: `${drop.left}%`,
+                color: drop.color,
+              }}
+              initial={{ y: -100 }}
+              animate={{ y: "110vh" }}
+              transition={{
+                duration: drop.duration,
+                delay: drop.delay,
+                repeat: Infinity,
+                ease: "linear",
+              }}
+            >
+              <Icon />
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* 🔥 LEFT SIDE */}
+      <div className="hidden md:flex w-1/2 items-center justify-center z-10">
+        <div className="text-center px-10">
+          <h1 className="text-5xl font-bold mb-4">
+            {"<Code Collaboration "}
+          <br/>
+          {"Platform />"}
+          </h1>
+          <p className="text-gray-400 text-lg">
+            Start your journey. Build something amazing 🚀
+          </p>
         </div>
+      </div>
 
-        {/* Right Panel - Register Form */}
-        <div className="w-full md:w-1/2 p-8">
-          <h2 className="text-3xl font-bold text-gray-800 mb-6">
-            Create your account
+      {/* 🔥 RIGHT SIDE */}
+      <div className="w-full md:w-1/2 flex items-center justify-center z-10 px-6">
+
+        <div className="w-full max-w-sm">
+
+          <h2 className="text-2xl font-semibold mb-2">
+            Create Account ✨
           </h2>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            {/* Username */}
-            <div>
-              <input
-                id="username"
-                type="text"
-                {...register("username", {
-                  required: "Username is required",
-                  validate: {
-                    lowercase: (value) =>
-                      /^[a-z0-9]+$/.test(value) ||
-                      "Only lowercase letters and numbers allowed",
-                  },
-                })}
-                placeholder="Username"
-                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500"
-              />
-              {errors.username && (
-                <p className="text-red-500 text-sm mt-1">
-                  {errors.username.message}
-                </p>
-              )}
-              {usernameError && (
-                <p className="text-red-500 text-sm mt-1">{usernameError}</p>
-              )}
-            </div>
 
-            {/* Password */}
+          <p className="text-gray-400 text-sm mb-6">
+            Join DevNest and start coding
+          </p>
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+
+            {/* USERNAME */}
+            <input
+              type="text"
+              placeholder="Username"
+              {...register("username", {
+                required: "Username required",
+                pattern: {
+                  value: /^[a-z0-9]+$/,
+                  message: "Lowercase & numbers only",
+                },
+              })}
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:border-blue-500 outline-none"
+            />
+
+            {errors.username && (
+              <p className="text-red-400 text-xs">
+                {errors.username.message}
+              </p>
+            )}
+            {usernameError && (
+              <p className="text-red-400 text-xs">{usernameError}</p>
+            )}
+
+            {/* PASSWORD */}
             <div className="relative">
               <input
-                id="password"
                 type={showPassword ? "text" : "password"}
-                {...register("password", {
-                  required: "Password is required",
-                  minLength: {
-                    value: 8,
-                    message: "Password must be at least 8 characters",
-                  },
-                })}
                 placeholder="Password"
-                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500"
+                {...register("password", {
+                  required: "Password required",
+                  minLength: { value: 8, message: "Min 8 characters" },
+                })}
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:border-blue-500 outline-none"
               />
+
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-2.5 text-gray-600"
+                className="absolute right-3 top-3"
               >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
-              {errors.password && (
-                <p className="text-red-500 text-sm mt-1">
-                  {errors.password.message}
-                </p>
-              )}
             </div>
 
-            {/* Confirm Password */}
+            {/* CONFIRM PASSWORD */}
             <div className="relative">
               <input
-                id="confirmPassword"
                 type={showConfirmPassword ? "text" : "password"}
+                placeholder="Confirm Password"
                 {...register("confirmPassword", {
-                  required: "Confirm Password is required",
                   validate: (value) =>
                     value === password || "Passwords do not match",
                 })}
-                placeholder="Confirm Password"
-                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:border-blue-500 outline-none"
               />
+
               <button
                 type="button"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-3 top-2.5 text-gray-600"
+                onClick={() =>
+                  setShowConfirmPassword(!showConfirmPassword)
+                }
+                className="absolute right-3 top-3"
               >
-                {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showConfirmPassword ? (
+                  <EyeOff size={18} />
+                ) : (
+                  <Eye size={18} />
+                )}
               </button>
-              {errors.confirmPassword && (
-                <p className="text-red-500 text-sm mt-1">
-                  {errors.confirmPassword.message}
-                </p>
-              )}
             </div>
 
-            {/* Submit Button */}
+            {errors.confirmPassword && (
+              <p className="text-red-400 text-xs">
+                {errors.confirmPassword.message}
+              </p>
+            )}
+
+            {/* BUTTON */}
             <button
               type="submit"
               disabled={isSubmitting}
-              className={`w-full py-2 bg-black  text-white font-semibold rounded-md transition duration-200 ${
-                isSubmitting
-                  ? "bg-gray-500 cursor-not-allowed"
-                  : "hover:bg-white hover:text-black border border-black "
-              }`}
+              className="w-full py-3 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 hover:opacity-90 transition flex items-center justify-center gap-2"
             >
-              {isSubmitting ? "Registering..." : "Register"}
+              {isSubmitting && (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              )}
+              {isSubmitting ? "Creating..." : "Register"}
             </button>
           </form>
 
-          {/* Footer */}
-          <p className="mt-6 text-sm text-gray-700">
+          <p className="mt-6 text-sm text-gray-400">
             Already have an account?{" "}
-            <Link
-              to="/login"
-              className="text-blue-600 font-medium hover:underline"
-            >
-              Sign in
+            <Link to="/login" className="text-blue-400 hover:underline">
+              Login
             </Link>
           </p>
+
         </div>
       </div>
     </div>

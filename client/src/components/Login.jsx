@@ -3,6 +3,9 @@ import { useForm } from "react-hook-form";
 import { useNavigate, Link } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import axios from "axios";
+import { motion } from "framer-motion";
+import { FaJs, FaPython, FaJava, FaHtml5, FaCss3Alt } from "react-icons/fa";
+import { SiCplusplus } from "react-icons/si";
 
 const Login = () => {
   const {
@@ -15,108 +18,155 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
 
+  const icons = [FaJs, FaPython, FaJava, SiCplusplus, FaHtml5, FaCss3Alt];
+
+  const colors = [
+    "#facc15",
+    "#3b82f6",
+    "#ef4444",
+    "#a855f7",
+    "#22c55e",
+    "#f97316",
+  ];
+
+  const [drops] = useState(() =>
+    Array.from({ length: 20 }).map((_, i) => ({
+      left: Math.random() * 100,
+      delay: Math.random() * 5,
+      duration: 4 + Math.random() * 4,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      Icon: icons[i % icons.length],
+    }))
+  );
+
   const onSubmit = async (data) => {
     try {
-      const response = await axios.post(
+      const res = await axios.post(
         `${import.meta.env.VITE_API_URL}/user/login`,
-        {
-          username: data.username,
-          password: data.password,
-        },
-        {
-          withCredentials: true,
-        }
+        data,
+        { withCredentials: true }
       );
 
-      if (response.status === 200) {
+      if (res.status === 200) {
         navigate(`/dashboard/${data.username}`);
       }
-    } catch (error) {
-      console.error("Login failed:", error.message);
-      setLoginError("Invalid username or password.");
+    } catch {
+      setLoginError("Invalid username or password");
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-500 via-gray-700 to-black">
-      <div className="w-full max-w-4xl bg-white shadow-2xl rounded-lg overflow-hidden flex flex-col md:flex-row">
-        {/* Left Panel - Info */}
-        <div className="hidden md:flex md:w-1/2 bg-gradient-to-br from-gray-500 via-gray-700 to-black items-center justify-center p-10 text-white">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold mb-4">Welcome Back!</h1>
-            <p className="text-lg">
-              Collaborate, code, and conquer with DevNest.
-            </p>
-          </div>
+    <div className="min-h-screen bg-black text-white flex relative overflow-hidden">
+
+      {/* 🔥 ICON RAIN */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
+        {drops.map((drop, i) => {
+          const Icon = drop.Icon;
+          return (
+            <motion.div
+              key={i}
+              className="absolute text-3xl opacity-70 drop-shadow-[0_0_8px_currentColor]"
+              style={{
+                left: `${drop.left}%`,
+                color: drop.color,
+              }}
+              initial={{ y: -100 }}
+              animate={{ y: "110vh" }}
+              transition={{
+                duration: drop.duration,
+                delay: drop.delay,
+                repeat: Infinity,
+                ease: "linear",
+              }}
+            >
+              <Icon />
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* 🔥 LEFT SIDE (BRANDING) */}
+      <div className="hidden md:flex w-1/2 items-center justify-center z-10">
+        <div className="text-center px-10">
+          <h1 className="text-5xl font-bold mb-4">
+            {"<Code Collaboration "}
+          <br/>
+          {"Platform />"}
+          </h1>
+          <p className="text-gray-400 text-lg">
+            Code together. Build faster. Collaborate smarter.
+          </p>
         </div>
+      </div>
 
-        {/* Right Panel - Form */}
-        <div className="w-full md:w-1/2 p-8">
-          <h2 className="text-3xl font-bold text-gray-800 mb-6">Login</h2>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            {/* Username */}
-            <div>
-              <input
-                id="username"
-                type="text"
-                placeholder="Username"
-                {...register("username", { required: "Username is required" })}
-                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              />
-              {errors.username && (
-                <p className="text-red-500 text-sm mt-1">
-                  {errors.username.message}
-                </p>
-              )}
-            </div>
+      {/* 🔥 RIGHT SIDE (FORM) */}
+      <div className="w-full md:w-1/2 flex items-center justify-center z-10 px-6">
 
-            {/* Password */}
+        <div className="w-full max-w-sm">
+
+          <h2 className="text-2xl font-semibold mb-2">
+            Welcome back 👋
+          </h2>
+
+          <p className="text-gray-400 text-sm mb-6">
+            Login to continue
+          </p>
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+
+            {/* USERNAME */}
             <div className="relative">
               <input
-                id="password"
+                type="text"
+                placeholder="Username"
+                {...register("username", { required: true })}
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:border-blue-500 outline-none"
+              />
+            </div>
+
+            {/* PASSWORD */}
+            <div className="relative">
+              <input
                 type={showPassword ? "text" : "password"}
                 placeholder="Password"
-                {...register("password", { required: "Password is required" })}
-                className="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                {...register("password", { required: true })}
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:border-blue-500 outline-none"
               />
+
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-2.5 text-gray-600"
+                className="absolute right-3 top-3"
               >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
-              {errors.password && (
-                <p className="text-red-500 text-sm mt-1">
-                  {errors.password.message}
-                </p>
-              )}
             </div>
 
-            {/* Error */}
             {loginError && (
-              <p className="text-red-600 font-medium text-sm">{loginError}</p>
+              <p className="text-red-400 text-sm">{loginError}</p>
             )}
 
-            {/* Submit */}
+            {/* BUTTON */}
             <button
               type="submit"
-              className="w-full hover:bg-white hover:text-black border border-black bg-black text-white py-2 rounded-md  transition duration-200"
               disabled={isSubmitting}
+              className="w-full py-3 rounded-lg bg-gradient-to-r from-blue-500 to-purple-600 hover:opacity-90 transition flex items-center justify-center gap-2"
             >
-              {isSubmitting ? "Logging in..." : "Sign In"}
+              {isSubmitting && (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              )}
+              {isSubmitting ? "Signing in..." : "Sign In"}
             </button>
           </form>
 
-          <p className="mt-6 text-sm text-gray-700">
-            Don't have an account?{" "}
-            <Link
-              to="/register"
-              className="text-indigo-600 hover:underline font-semibold"
-            >
-              Sign up
+          {/* FOOTER */}
+          <p className="mt-6 text-sm text-gray-400">
+            Don’t have an account?{" "}
+            <Link to="/register" className="text-blue-400 hover:underline">
+              Create Account
             </Link>
           </p>
+
         </div>
       </div>
     </div>
