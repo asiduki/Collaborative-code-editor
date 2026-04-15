@@ -3,6 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import Connect from "./db/connection.js";
 import { app, server } from "./socket/socket.js";  // now works ✅
+import aiRoutes from "./routes/ai.route.js"
 
 import dotenv from "dotenv";
 dotenv.config({ path: "./.env" });
@@ -29,6 +30,8 @@ app.get("/", (req, res) => {
 app.use("/user", authRouter);
 app.use("/record", recordRouter);
 app.use("/api", convertRoutes);
+app.use("/api/convert" ,aiRoutes)
+
 
 server.listen(5000, () => {
   Connect();

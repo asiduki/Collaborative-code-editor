@@ -26,6 +26,7 @@ const EditorPage = () => {
   const [outputDetails, setOutputDetails] = useState(null);
   const socketRef = useRef(null);
   const codeRef = useRef("");
+  const [aiOutput, setAiOutput] = useState(null);
 
   const location = useLocation();
   const { roomId } = useParams();
@@ -371,6 +372,7 @@ const EditorPage = () => {
               applyDetected(detected, false);
             }}
             onOutputUpdate={setOutputDetails}
+            onAiOutput={setAiOutput}
           />
         </div>
 
@@ -381,7 +383,7 @@ const EditorPage = () => {
             selectedSpeakerDeviceId={selectedSpeaker}
             localLevel={localLevel}
           />
-          <OutputWindow outputDetails={outputDetails} />
+          <OutputWindow outputDetails={outputDetails} aiOutput={aiOutput}/>
 
           {/* Converted Code Panel */}
           {convertedCode && (
