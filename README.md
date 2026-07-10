@@ -166,6 +166,20 @@ JWT_SECRET=your_secret_key
 GOOGLE_GEMINI_KEY=your_gemini_key
 ```
 
+Create a `.env` file inside the **client** folder.
+
+```env
+
+VITE_RAPID_API_URL=Your_Key_Here
+
+VITE_RAPID_API_KEY=Your_Key_Here
+
+VITE_RAPID_API_HOST=Your_Key_Here
+
+VITE_API_URL=Your_Key_Here
+
+```
+
 ---
 
 # ▶ Running the Project
