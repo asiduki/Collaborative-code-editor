@@ -232,28 +232,28 @@ Every keystroke is synchronized instantly.
 
 ## Landing Page
 
-(image.png)
+![alt text](image.png)
 
 ## DashBoard Page
-(image-1.png)
+![alt text](image-1.png)
 
 ---
 
 ## Login
 
-(image-2.png)
+![alt text](image-2.png)
 
 ---
 
 ## Register
 
-(image-3.png)
+![alt text](image-3.png)
 
 ---
 
 ## Collaborative Editor
 
-(image-4.png)
+![alt text](image-4.png)
 ---
 
 # 🌟 Future Improvements
